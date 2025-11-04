@@ -250,51 +250,55 @@ def analyze_zero_one_drift(S0, K, T, sigma, r, N, mu_list, num_paths=1000):
 
 def zero_one_strategy(S0, K, T, mu, sigma, r, N, num_paths=10000):
     """
-    Zero/One strategy alternative to delta hedging
+    Zero/One strategy with discrete monitoring.
+    Minimal fix: when a crossing of K is detected between two grid points,
+    execute the trade at price = K (not at the current_price).
+    No Brownian-bridge; just sign-change detection.
     """
     np.random.seed(42)
-    
     dt = T / N
     replication_errors = np.zeros(num_paths)
-    
+
     for path in range(num_paths):
-        # Generate stock price path
+        # Generate GBM path
         Z = np.random.standard_normal(N)
         stock_prices = np.zeros(N + 1)
         stock_prices[0] = S0
-        
         for i in range(1, N + 1):
-            stock_prices[i] = stock_prices[i-1] * np.exp((mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z[i-1])
-        
-        # Implement zero/one strategy
-        shares_held = 0
-        cash_account = 0
+            stock_prices[i] = stock_prices[i-1] * np.exp((mu - 0.5 * sigma**2) * dt
+                                                         + sigma * np.sqrt(dt) * Z[i-1])
+
+        shares_held = 0.0
+        cash_account = 0.0
         previous_price = stock_prices[0]
-        
+
         for i in range(1, N + 1):
             current_price = stock_prices[i]
-            
-            # Check for crossing events
-            if shares_held == 0 and previous_price <= K and current_price > K:
-                cash_account -= current_price
-                shares_held = 1
-            elif shares_held == 1 and previous_price >= K and current_price < K:
-                cash_account += current_price
-                shares_held = 0
-            
+
+            # Detect crossing of K between time i-1 and i (discrete sign change)
+            # If S moved from <=K to >K: buy 1 share at price = K
+            if (shares_held == 0.0) and (previous_price <= K) and (current_price > K):
+                cash_account -= K   # trade at strike, not at current_price
+                shares_held = 1.0
+
+            # If S moved from >=K to <K: sell back to 0 share at price = K
+            elif (shares_held == 1.0) and (previous_price >= K) and (current_price < K):
+                cash_account += K
+                shares_held = 0.0
+
             previous_price = current_price
-            
+
+            # Accrue interest between rebalancing dates (skip after last step)
             if i < N:
+                # This treats positive cash as lending, negative cash as borrowing
                 cash_account *= np.exp(r * dt)
-        
-        # Final settlement
+
+        # Settlement at maturity
         final_price = stock_prices[-1]
-        option_payoff = max(final_price - K, 0)
+        option_payoff = max(final_price - K, 0.0)  # OTM call use-case
         portfolio_value = shares_held * final_price + cash_account
-        replication_error = portfolio_value - option_payoff
-        
-        replication_errors[path] = replication_error
-    
+        replication_errors[path] = portfolio_value - option_payoff
+
     return np.mean(replication_errors), np.std(replication_errors), replication_errors
 
 def plot_comprehensive_results(N_list, delta_means_freq, delta_stds_freq, zero_one_means_freq, zero_one_stds_freq, 
