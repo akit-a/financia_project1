@@ -268,7 +268,7 @@ def zero_one_strategy(S0, K, T, mu, sigma, r, N, num_paths=10000):
         
         # Implement zero/one strategy
         shares_held = 0
-        cash_account = 10000
+        cash_account = 0
         previous_price = stock_prices[0]
         
         for i in range(1, N + 1):
@@ -822,11 +822,12 @@ def plot_stock_comparison(comparison_df):
     
     plt.tight_layout()
     plt.show()
-    
+
 if __name__ == "__main__":
     # Base parameters for theoretical analysis
     S0 = 100
-    K = 100
+    K_delta = 100  # ATM for delta hedging comparison
+    K_zero_one = 110  # OTM for zero/one strategy (K > S0 as in text description)
     T = 1
     mu = 0.1
     sigma = 0.3
@@ -834,7 +835,8 @@ if __name__ == "__main__":
     N = 4
     
     print("=== DISCRETE DELTA HEDGING SIMULATION ===")
-    print(f"Base Parameters: S0={S0}, K={K}, T={T}, μ={mu}, σ={sigma}, r={r}")
+    print(f"Base Parameters: S0={S0}, K_delta={K_delta}, K_zero_one={K_zero_one}, T={T}, μ={mu}, σ={sigma}, r={r}")
+    print(f"Delta Hedging: ATM (K=S0), Zero/One Strategy: OTM (K>S0) as described in text")
     
     # ============================================================================
     # 1. THEORETICAL ANALYSIS WITH BASE PARAMETERS
@@ -842,10 +844,10 @@ if __name__ == "__main__":
     
     print("\n--- 1. Basic Delta Hedging Simulation ---")
     mean_error, std_error, errors, hedge_vals = discrete_delta_hedging_simulator(
-        S0, K, T, mu, sigma, r, N, num_paths=2000
+        S0, K_delta, T, mu, sigma, r, N, num_paths=2000
     )
     
-    bs_price = black_scholes_price(S0, K, T, r, sigma, 'call')
+    bs_price = black_scholes_price(S0, K_delta, T, r, sigma, 'call')
     print(f"Black-Scholes Price: {bs_price:.6f}")
     print(f"Mean Replication Error: {mean_error:.6f}")
     print(f"Standard Deviation: {std_error:.6f}")
@@ -856,7 +858,7 @@ if __name__ == "__main__":
     
     print("\n--- 2. Hedging Frequency Analysis ---")
     N_list = [4, 8, 12, 26, 52, 104, 252]
-    means_freq, stds_freq = analyze_hedging_frequency(S0, K, T, mu, sigma, r, N_list, num_paths=1000)
+    means_freq, stds_freq = analyze_hedging_frequency(S0, K_delta, T, mu, sigma, r, N_list, num_paths=1000)
     variances = [std**2 for std in stds_freq]
     alpha, r_squared = estimate_convergence_rate(N_list, variances)
     
@@ -866,22 +868,22 @@ if __name__ == "__main__":
     
     print("\n--- 3. Drift Rate Sensitivity Analysis ---")
     mu_list = [-0.2, -0.1, 0.0, 0.1, 0.2, 0.3]
-    means_drift, stds_drift = analyze_drift_dependence(S0, K, T, sigma, r, N, mu_list, num_paths=1000)
+    means_drift, stds_drift = analyze_drift_dependence(S0, K_delta, T, sigma, r, N, mu_list, num_paths=1000)
     
     # ============================================================================
-    # 4. ALTERNATIVE STRATEGY COMPARISON
+    # 4. ALTERNATIVE STRATEGY COMPARISON - USING OTM FOR ZERO/ONE
     # ============================================================================
     
     print("\n--- 4. Alternative Strategy Analysis ---")
     
-    print("\n4.1 Zero/One Strategy - Frequency Analysis")
+    print("\n4.1 Zero/One Strategy - Frequency Analysis (OTM)")
     zero_one_means_freq, zero_one_stds_freq = analyze_zero_one_frequency(
-        S0, K, T, mu, sigma, r, N_list, num_paths=500
+        S0, K_zero_one, T, mu, sigma, r, N_list, num_paths=500
     )
     
-    print("\n4.2 Zero/One Strategy - Drift Analysis")
+    print("\n4.2 Zero/One Strategy - Drift Analysis (OTM)")
     zero_one_means_drift, zero_one_stds_drift = analyze_zero_one_drift(
-        S0, K, T, sigma, r, N, mu_list, num_paths=500
+        S0, K_zero_one, T, sigma, r, N, mu_list, num_paths=500
     )
     
     # ============================================================================
@@ -907,7 +909,7 @@ if __name__ == "__main__":
     # ============================================================================
     
     print("\n--- 6. Strike and Maturity Grid Analysis ---")
-    Ks = [250, 260, 270, 280, 290]
+    Ks = [250, 260, 270, 280, 290]  # OTM strikes for S0=100
     Ts = [0.25, 0.5, 1.0, 2.0]
     grid_results = ci_grid_over_KT(S0, mu, sigma, r, N, Ks, Ts, num_paths=500)
     
@@ -963,10 +965,15 @@ if __name__ == "__main__":
     print("\n--- 8.3 Apple Inc. (AAPL) Detailed Analysis ---")
     aapl_results = analyze_specific_stock('AAPL', T=1, N=52, num_paths=5000)
 
-    # Strike price sensitivity for AAPL
-    print("\n--- 8.4 AAPL Strike Price Sensitivity ---")
-    strikes = [140, 150, 160, 170, 180]
-    for strike in strikes:
+    # Strike price sensitivity for AAPL - using OTM strikes
+    print("\n--- 8.4 AAPL Strike Price Sensitivity (OTM) ---")
+    # Get current AAPL price for OTM strike calculation
+    aapl_params = get_realistic_parameters('AAPL')
+    aapl_price = aapl_params['S0']
+    otm_strikes = [int(aapl_price * 1.1), int(aapl_price * 1.15), int(aapl_price * 1.2), 
+                   int(aapl_price * 1.25), int(aapl_price * 1.3)]
+    
+    for strike in otm_strikes:
         analyze_specific_stock('AAPL', K=strike, T=0.5, N=26, num_paths=1000)
 
     # ============================================================================
@@ -982,11 +989,11 @@ if __name__ == "__main__":
 
     print(f"1. Convergence rate: α = {alpha:.3f} (theoretical expectation: 1.0)")
     print(f"2. Delta hedging error Std: {stds_freq[-1]:.3f} (daily) vs {stds_freq[0]:.3f} (quarterly)")
-    print(f"3. Zero/One strategy performs poorly (Std ≈ {zero_one_stds_freq[0]:.1f})")
+    print(f"3. Zero/One strategy (OTM) performs poorly (Std ≈ {zero_one_stds_freq[0]:.1f})")
     print(f"4. Volatility impact: σ=0.15→Std={scenario_results['volatility']['Std_Error'].iloc[0]:.3f}, σ=0.8→Std={scenario_results['volatility']['Std_Error'].iloc[-1]:.3f}")
     print(f"5. Moneyness risk: ITM Std={scenario_results['moneyness']['Std_Error'].iloc[0]:.3f}, OTM Std={scenario_results['moneyness']['Std_Error'].iloc[-1]:.3f}")
     print(f"6. Real stocks: TSLA (σ={comparison_df['Volatility'].iloc[3]:.1%}) has highest hedging error (Std={comparison_df['Std_Error'].iloc[3]:.2f})")
-    print(f"7. AAPL strike sensitivity: Deep ITM Std=0.01, OTM Std=0.45")
+    print(f"7. AAPL OTM strike sensitivity analyzed for strikes: {otm_strikes}")
     print(f"8. Interest rate impact limited: r=0.01→Std={scenario_results['rates']['Std_Error'].iloc[0]:.3f}, r=0.15→Std={scenario_results['rates']['Std_Error'].iloc[-1]:.3f}")
     print(f"9. Market comparison: Theoretical CI is {market_ratio:.1f}x wider than actual market spreads")
     print(f"10. Hedging frequency critical: daily vs quarterly reduces error by {(1-stds_freq[-1]/stds_freq[0])*100:.1f}%")
