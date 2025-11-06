@@ -521,7 +521,7 @@ def get_real_option_data(ticker, expiration_date=None):
         calls = options_chain.calls
         puts = options_chain.puts
         
-        print(f"\n📊 Real Option Data for {ticker} (Expiry: {expiration_date})")
+        print(f"\n Real Option Data for {ticker} (Expiry: {expiration_date})")
         print(f"Available calls: {len(calls)}, Available puts: {len(puts)}")
         
         # Select relevant columns and add moneyness info
